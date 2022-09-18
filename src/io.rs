@@ -3,16 +3,7 @@ use std::io;
 use std::error::Error;
 use std::io::{Stdin, Stdout};
 
-use serde::{Deserialize, Serialize};
-
-#[derive(Debug, Serialize,Deserialize)]
-pub(crate) struct Record {
-    #[serde(rename = "type")]
-    ty: String,
-    client: u32,
-    tx: u16,
-    amount: u32,
-}
+use crate::record::Record;
 
 pub struct CsvReader {
     inner: Reader<Stdin>

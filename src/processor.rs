@@ -1,4 +1,5 @@
 use crate::io::{CsvReader, CsvWriter};
+use crate::record::Account;
 
 pub struct Processor {
     reader: CsvReader,
@@ -16,7 +17,7 @@ impl Processor {
     pub fn start(mut self) {
         match self.reader.read() {
             Ok(records) => self.writer.write(records).expect("failed to write"),
-            Err(e) => println!("error: {}", e),
+            Err(e) => panic!("failed to read: {}", e),
         }
     }
 }
