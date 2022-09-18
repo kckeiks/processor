@@ -1,18 +1,18 @@
 use csv::{Reader, Writer};
-use std::io;
 use std::error::Error;
+use std::io;
 use std::io::{Stdin, Stdout};
 
-use crate::record::Record;
+use crate::processor::Record;
 
 pub struct CsvReader {
-    inner: Reader<Stdin>
+    inner: Reader<Stdin>,
 }
 
 impl CsvReader {
     pub(crate) fn new() -> Self {
         Self {
-            inner: Reader::from_reader(io::stdin())
+            inner: Reader::from_reader(io::stdin()),
         }
     }
 
@@ -27,13 +27,13 @@ impl CsvReader {
 }
 
 pub struct CsvWriter {
-    inner: Writer<Stdout>
+    inner: Writer<Stdout>,
 }
 
 impl CsvWriter {
     pub(crate) fn new() -> Self {
         Self {
-            inner: Writer::from_writer(io::stdout())
+            inner: Writer::from_writer(io::stdout()),
         }
     }
 

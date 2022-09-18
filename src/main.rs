@@ -1,6 +1,7 @@
-mod processor;
+mod account;
+mod error;
 mod io;
-mod record;
+mod processor;
 
 fn main() {
     let proc = processor::Processor::new();
