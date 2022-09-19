@@ -27,11 +27,37 @@ where
     Ok(Some(decimal))
 }
 
+// This deserializer the type since we can't use serde 'tag's with csv.
+fn deserialize_type<'de, D>(amount: D) -> std::result::Result<Type, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let buf = String::deserialize(amount)?;
+    let ty = match buf.to_lowercase().as_str() {
+        "deposit" => Type::Deposit,
+        "withdrawal" => Type::Withdrawal,
+        "dispute" => Type::Dispute,
+        "resolve" => Type::Resolve,
+        "chargeback" => Type::Chargeback,
+        _ => return Err(serde::de::Error::custom("invalid type")),
+    };
+    Ok(ty)
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+enum Type {
+    Deposit,
+    Withdrawal,
+    Dispute,
+    Resolve,
+    Chargeback,
+}
+
 /// Record from csv.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct Record {
-    #[serde(rename = "type")]
-    ty: String,
+    #[serde(rename = "type", deserialize_with = "deserialize_type")]
+    ty: Type,
     client: u16,
     tx: u32,
     #[serde(deserialize_with = "deserialize_amount")]
@@ -73,19 +99,18 @@ impl Processor {
 
     /// Process a single record.
     fn process(&mut self, record: Record) -> Result<()> {
-        match record.ty.to_lowercase().as_str() {
-            "deposit" => {
+        match record.ty {
+            Type::Deposit => {
                 let amount = record.amount.ok_or(Error::InvalidData)?;
                 self.accounts.deposit(record.client, amount, record.tx)?
             }
-            "withdrawal" => {
+            Type::Withdrawal => {
                 let amount = record.amount.ok_or(Error::InvalidData)?;
                 self.accounts.withdraw(record.client, amount, record.tx)?
             }
-            "dispute" => self.accounts.dispute(record.client, record.tx)?,
-            "resolve" => self.accounts.resolve(record.client, record.tx)?,
-            "chargeback" => self.accounts.chargeback(record.client, record.tx)?,
-            _ => return Err(Error::InvalidData),
+            Type::Dispute => self.accounts.dispute(record.client, record.tx)?,
+            Type::Resolve => self.accounts.resolve(record.client, record.tx)?,
+            Type::Chargeback => self.accounts.chargeback(record.client, record.tx)?,
         }
         Ok(())
     }
