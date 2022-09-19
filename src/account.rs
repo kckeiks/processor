@@ -74,10 +74,12 @@ impl Account {
         self.locked
     }
 
+    #[cfg(test)]
     pub(crate) fn available(&self) -> f64 {
         self.available
     }
 
+    #[cfg(test)]
     pub(crate) fn total(&self) -> f64 {
         self.total
     }
@@ -145,7 +147,7 @@ impl Accounts {
 
             if let Status::Open = trans.status {
                 if let Err(Error::InsufficientFunds) = account.dispute(trans.amount) {
-                    return Ok(())
+                    return Ok(());
                 }
                 trans.status = Status::Pending;
                 let new_trans = trans.clone();
@@ -166,7 +168,7 @@ impl Accounts {
 
             if let Status::Pending = trans.status {
                 if let Err(Error::InsufficientFunds) = account.resolve(trans.amount) {
-                    return Ok(())
+                    return Ok(());
                 }
                 trans.status = Status::Resolved;
                 let new_trans = trans.clone();
@@ -187,7 +189,7 @@ impl Accounts {
 
             if let Status::Pending = trans.status {
                 if let Err(Error::InsufficientFunds) = account.chargeback(trans.amount) {
-                    return Ok(())
+                    return Ok(());
                 }
                 trans.status = Status::Chargeback;
                 let new_trans = trans.clone();
