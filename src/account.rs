@@ -108,15 +108,6 @@ impl Accounts {
         Ok(self.inner.entry(id).or_insert(Account::new(id)).clone())
     }
 
-    fn transaction(&self, id: u32) -> Option<Transaction> {
-        self.transactions.get(&id).cloned()
-    }
-
-    fn update_account(&mut self, account: Account) -> Result<()> {
-        self.inner.insert(account.client, account);
-        Ok(())
-    }
-
     pub(crate) fn deposit(&mut self, client: u16, amount: Decimal, tx: u32) -> Result<()> {
         if self.transaction(tx).is_some() {
             return Err(Error::TxExists);
@@ -127,9 +118,9 @@ impl Accounts {
             return Ok(());
         }
         account.deposit(amount)?;
-        self.update_account(account)?;
+        self.put_account(account)?;
         // Record transaction.
-        self.update_transaction(Transaction::new(tx, amount))?;
+        self.put_transaction(Transaction::new(tx, amount))?;
         Ok(())
     }
 
@@ -143,9 +134,9 @@ impl Accounts {
             return Ok(());
         }
         account.withdraw(amount)?;
-        self.update_account(account)?;
+        self.put_account(account)?;
         // Record transaction.
-        self.update_transaction(Transaction::new(tx, amount))?;
+        self.put_transaction(Transaction::new(tx, amount))?;
         Ok(())
     }
 
@@ -162,10 +153,10 @@ impl Accounts {
                 }
                 trans.status = Status::Pending;
                 let new_trans = trans.clone();
-                self.update_transaction(new_trans)?;
+                self.put_transaction(new_trans)?;
             }
 
-            self.update_account(account)?;
+            self.put_account(account)?;
         }
         Ok(())
     }
@@ -183,10 +174,10 @@ impl Accounts {
                 }
                 trans.status = Status::Resolved;
                 let new_trans = trans.clone();
-                self.update_transaction(new_trans)?;
+                self.put_transaction(new_trans)?;
             }
 
-            self.update_account(account)?;
+            self.put_account(account)?;
         }
         Ok(())
     }
@@ -204,15 +195,24 @@ impl Accounts {
                 }
                 trans.status = Status::Chargeback;
                 let new_trans = trans.clone();
-                self.update_transaction(new_trans)?;
+                self.put_transaction(new_trans)?;
             }
 
-            self.update_account(account)?;
+            self.put_account(account)?;
         }
         Ok(())
     }
 
-    fn update_transaction(&mut self, tx: Transaction) -> Result<()> {
+    fn transaction(&self, id: u32) -> Option<Transaction> {
+        self.transactions.get(&id).cloned()
+    }
+
+    fn put_account(&mut self, account: Account) -> Result<()> {
+        self.inner.insert(account.client, account);
+        Ok(())
+    }
+
+    fn put_transaction(&mut self, tx: Transaction) -> Result<()> {
         self.transactions.insert(tx.id, tx);
         Ok(())
     }
