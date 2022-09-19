@@ -10,6 +10,8 @@ This assumes that `transactions.csv` is stored in the project's root directory.
 You can also use an absolute path. The `env_logger` crate is used to see errors 
 crated while processing each record.
 
+You can rust unit tests with `cargo`.
+
 ### Assumptions
 
 1. Transactions occur **chronologically** in the input batch to the processor.
