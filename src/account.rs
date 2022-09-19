@@ -118,6 +118,10 @@ impl Accounts {
     }
 
     pub(crate) fn deposit(&mut self, client: u16, amount: Decimal, tx: u32) -> Result<()> {
+        if self.transaction(tx).is_some() {
+            return Err(Error::TxExists);
+        }
+
         let mut account = self.account(client)?;
         if account.frozen() {
             return Ok(());
@@ -130,6 +134,10 @@ impl Accounts {
     }
 
     pub(crate) fn withdraw(&mut self, client: u16, amount: Decimal, tx: u32) -> Result<()> {
+        if self.transaction(tx).is_some() {
+            return Err(Error::TxExists);
+        }
+
         let mut account = self.account(client)?;
         if account.frozen() {
             return Ok(());

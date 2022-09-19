@@ -325,7 +325,7 @@ mod tests {
             "deposit,1,61,100",
             "dispute,1,33,",
             "chargeback,1,33,",
-            "deposit,1,61,100"
+            "deposit,1,62,100"
         );
         let mut processor = Processor::new();
         for record in records {
@@ -363,5 +363,20 @@ mod tests {
             .unwrap()
             .to_string()
             .contains("only up to four decimal places for precision is allowed"));
+    }
+
+    #[test]
+    fn reusing_tx() {
+        // Transaction ID is globally unique so reusing it causes error.
+        let records = records!("deposit,1,61,4.321", "deposit,1,61,1.001");
+        let mut processor = Processor::new();
+
+        let mut records_iter = records.into_iter();
+        processor.process(records_iter.next().unwrap()).unwrap();
+
+        assert_eq!(
+            processor.process(records_iter.next().unwrap()),
+            Err(Error::TxExists)
+        )
     }
 }

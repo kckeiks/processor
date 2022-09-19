@@ -10,4 +10,6 @@ pub(crate) enum Error {
     InsufficientFunds,
     #[error("overflow")]
     Overflow,
+    #[error("tx already exists")]
+    TxExists,
 }
