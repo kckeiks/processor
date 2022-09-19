@@ -104,6 +104,10 @@ impl Accounts {
         }
     }
 
+    pub(crate) fn accounts(&self) -> Vec<&Account> {
+        self.inner.values().collect()
+    }
+
     pub(crate) fn account(&mut self, id: u16) -> Result<Account> {
         Ok(self.inner.entry(id).or_insert(Account::new(id)).clone())
     }

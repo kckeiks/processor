@@ -63,7 +63,9 @@ impl Processor {
                         log::error!("{:?}", e);
                     }
                 }
-                self.writer.write(records).expect("failed to write")
+                self.writer
+                    .write(self.accounts.accounts())
+                    .expect("failed to write")
             }
             Err(e) => panic!("failed to read: {}", e),
         }

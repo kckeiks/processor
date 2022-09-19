@@ -1,3 +1,4 @@
+use crate::account::Account;
 use csv::{Reader, Writer};
 use std::error::Error;
 use std::io;
@@ -37,7 +38,7 @@ impl CsvWriter {
         }
     }
 
-    pub(crate) fn write(&mut self, data: Vec<Record>) -> Result<(), Box<dyn Error>> {
+    pub(crate) fn write(&mut self, data: Vec<&Account>) -> Result<(), Box<dyn Error>> {
         for d in data {
             self.inner.serialize(d).map_err(|e| Box::new(e))?;
         }
