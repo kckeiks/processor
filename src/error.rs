@@ -8,4 +8,6 @@ pub(crate) enum Error {
     InvalidData,
     #[error("insufficient funds for operation")]
     InsufficientFunds,
+    #[error("overflow")]
+    Overflow,
 }

@@ -1,16 +1,41 @@
-use serde::{Deserialize, Serialize};
+use rust_decimal::Decimal;
+use serde::{Deserialize, Deserializer, Serialize};
+use std::str::FromStr;
 
 use crate::account::Accounts;
 use crate::error::{Error, Result};
 use crate::io::{CsvReader, CsvWriter};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+// This deserializer is needed to make sure precision is up to 4 decimal places.
+fn deserialize_amount<'de, D>(amount: D) -> std::result::Result<Option<Decimal>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let buf = String::deserialize(amount)?;
+    if buf.is_empty() {
+        return Ok(None);
+    }
+
+    let decimal = Decimal::from_str(buf.as_str())
+        .map_err(serde::de::Error::custom)?
+        .normalize();
+    if decimal.scale() > 4 {
+        return Err(serde::de::Error::custom(
+            "only up to four decimal places for precision is allowed",
+        ));
+    }
+    Ok(Some(decimal))
+}
+
+/// Record from csv.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub(crate) struct Record {
     #[serde(rename = "type")]
     ty: String,
     client: u16,
     tx: u32,
-    amount: Option<f64>,
+    #[serde(deserialize_with = "deserialize_amount")]
+    amount: Option<Decimal>,
 }
 
 /// Processor processes the transactions.
@@ -69,6 +94,7 @@ mod tests {
     use crate::error::Error;
     use crate::processor::{Processor, Record};
     use csv::Reader;
+    use rust_decimal::Decimal;
 
     // Creates Records from strings.
     macro_rules! records {
@@ -89,6 +115,16 @@ mod tests {
         }}
     }
 
+    // Creates Decimal, optionally with a given precision.
+    macro_rules! dec {
+        ($num:expr, $prec:expr) => {{
+            Decimal::new($num, $prec)
+        }};
+        ($num:expr) => {{
+            Decimal::new($num, 0)
+        }};
+    }
+
     #[test]
     fn deposit_success() {
         let records = records!(
@@ -103,15 +139,15 @@ mod tests {
         }
         assert_eq!(
             processor.accounts.account(1).unwrap().available(),
-            150 as f64
+            dec!(150)
         );
         assert_eq!(
             processor.accounts.account(2).unwrap().available(),
-            100 as f64
+            dec!(100)
         );
         assert_eq!(
             processor.accounts.account(3).unwrap().available(),
-            120 as f64
+            dec!(120)
         );
     }
 
@@ -127,13 +163,10 @@ mod tests {
         for record in records {
             processor.process(record).unwrap();
         }
-        assert_eq!(
-            processor.accounts.account(1).unwrap().available(),
-            50 as f64
-        );
+        assert_eq!(processor.accounts.account(1).unwrap().available(), dec!(50));
         assert_eq!(
             processor.accounts.account(2).unwrap().available(),
-            180 as f64
+            dec!(180)
         );
     }
 
@@ -154,11 +187,11 @@ mod tests {
         );
         assert_eq!(
             processor.accounts.account(1).unwrap().available(),
-            100 as f64
+            dec!(100)
         );
         assert_eq!(
             processor.accounts.account(2).unwrap().available(),
-            200 as f64
+            dec!(200)
         );
 
         // We try to withdraw from recently created client account.
@@ -169,7 +202,10 @@ mod tests {
             processor.process(records_iter.next().unwrap()),
             Err(Error::InsufficientFunds)
         );
-        assert_eq!(processor.accounts.account(1).unwrap().available(), 0 as f64);
+        assert_eq!(
+            processor.accounts.account(1).unwrap().available(),
+            Decimal::ZERO
+        );
     }
 
     #[test]
@@ -188,14 +224,14 @@ mod tests {
         }
         assert_eq!(
             processor.accounts.account(1).unwrap().available(),
-            220 as f64
+            dec!(220)
         );
-        assert_eq!(processor.accounts.account(1).unwrap().total(), 320 as f64);
+        assert_eq!(processor.accounts.account(1).unwrap().total(), dec!(320));
         assert_eq!(
             processor.accounts.account(2).unwrap().available(),
-            100 as f64
+            dec!(100)
         );
-        assert_eq!(processor.accounts.account(2).unwrap().total(), 100 as f64);
+        assert_eq!(processor.accounts.account(2).unwrap().total(), dec!(100));
 
         // We get funds back after resolving.
         let records = records!("resolve,1,61,", "deposit,1,69,100");
@@ -204,9 +240,9 @@ mod tests {
         }
         assert_eq!(
             processor.accounts.account(1).unwrap().available(),
-            420 as f64
+            dec!(420)
         );
-        assert_eq!(processor.accounts.account(1).unwrap().total(), 420 as f64);
+        assert_eq!(processor.accounts.account(1).unwrap().total(), dec!(420));
 
         // Try to resolve transaction that is not being desputed.
         let records = records!(
@@ -221,9 +257,9 @@ mod tests {
         }
         assert_eq!(
             processor.accounts.account(1).unwrap().available(),
-            320 as f64
+            dec!(320)
         );
-        assert_eq!(processor.accounts.account(1).unwrap().total(), 320 as f64);
+        assert_eq!(processor.accounts.account(1).unwrap().total(), dec!(320));
     }
 
     #[test]
@@ -242,14 +278,14 @@ mod tests {
         }
         assert_eq!(
             processor.accounts.account(1).unwrap().available(),
-            220 as f64
+            dec!(220)
         );
-        assert_eq!(processor.accounts.account(1).unwrap().total(), 320 as f64);
+        assert_eq!(processor.accounts.account(1).unwrap().total(), dec!(320));
         assert_eq!(
             processor.accounts.account(2).unwrap().available(),
-            100 as f64
+            dec!(100)
         );
-        assert_eq!(processor.accounts.account(2).unwrap().total(), 100 as f64);
+        assert_eq!(processor.accounts.account(2).unwrap().total(), dec!(100));
 
         // We get a chargeback and trying to deposit fails because account is frozen.
         let records = records!("chargeback,1,61,", "deposit,1,69,100");
@@ -258,9 +294,9 @@ mod tests {
         }
         assert_eq!(
             processor.accounts.account(1).unwrap().available(),
-            220 as f64
+            dec!(220)
         );
-        assert_eq!(processor.accounts.account(1).unwrap().total(), 220 as f64);
+        assert_eq!(processor.accounts.account(1).unwrap().total(), dec!(220));
 
         // Try to chargeback a non-desputed transaction.
         let records = records!(
@@ -277,9 +313,9 @@ mod tests {
         // Chargeback gets ignored and we can still process other records.
         assert_eq!(
             processor.accounts.account(1).unwrap().available(),
-            300 as f64
+            dec!(300)
         );
-        assert_eq!(processor.accounts.account(1).unwrap().total(), 300 as f64);
+        assert_eq!(processor.accounts.account(1).unwrap().total(), dec!(300));
     }
 
     #[test]
@@ -297,8 +333,35 @@ mod tests {
         }
         assert_eq!(
             processor.accounts.account(1).unwrap().available(),
-            200 as f64
+            dec!(200)
         );
-        assert_eq!(processor.accounts.account(1).unwrap().total(), 200 as f64);
+        assert_eq!(processor.accounts.account(1).unwrap().total(), dec!(200));
+    }
+
+    #[test]
+    fn precision() {
+        let records = records!("deposit,1,61,4.321", "withdrawal,1,62,1.001");
+        let mut processor = Processor::new();
+        for record in records {
+            processor.process(record).unwrap();
+        }
+        assert_eq!(
+            processor.accounts.account(1).unwrap().available(),
+            dec!(332, 2)
+        );
+        assert_eq!(processor.accounts.account(1).unwrap().total(), dec!(332, 2));
+
+        // Invalid precision.
+        let mut data = String::from("type,client,tx,amount\n");
+        data.push_str("deposit,1,61,4.32111");
+        data.push_str("\n");
+
+        let mut rdr = Reader::from_reader(data.as_bytes());
+        let err_msg = rdr.deserialize::<Record>().next().unwrap();
+        assert!(err_msg
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("only up to four decimal places for precision is allowed"));
     }
 }

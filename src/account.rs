@@ -1,3 +1,4 @@
+use rust_decimal::Decimal;
 use serde::Serialize;
 use std::collections::HashMap;
 
@@ -7,9 +8,9 @@ use crate::error::{Error, Result};
 #[derive(Debug, Serialize, Default, Clone)]
 pub(crate) struct Account {
     client: u16,
-    available: f64,
-    held: f64,
-    total: f64,
+    available: Decimal,
+    held: Decimal,
+    total: Decimal,
     locked: bool,
 }
 
@@ -20,51 +21,53 @@ impl Account {
         account
     }
 
-    fn deposit(&mut self, amount: f64) -> Result<()> {
-        self.available += amount;
-        self.total += amount;
+    fn deposit(&mut self, amount: Decimal) -> Result<()> {
+        self.available = self.available.checked_add(amount).ok_or(Error::Overflow)?;
+        self.total = self.total.checked_add(amount).ok_or(Error::Overflow)?;
         Ok(())
     }
 
-    fn hold(&mut self, amount: f64) -> Result<()> {
-        self.held += amount;
-        self.total += amount;
+    fn hold(&mut self, amount: Decimal) -> Result<()> {
+        self.held = self.held.checked_add(amount).ok_or(Error::Overflow)?;
+        self.total = self.total.checked_add(amount).ok_or(Error::Overflow)?;
         Ok(())
     }
 
-    fn withdraw(&mut self, amount: f64) -> Result<()> {
-        if self.available - amount < 0 as f64 {
+    fn withdraw(&mut self, amount: Decimal) -> Result<()> {
+        let available = self.available.checked_sub(amount).ok_or(Error::Overflow)?;
+        if available < Decimal::ZERO {
             Err(Error::InsufficientFunds)
         } else {
-            self.available -= amount;
-            self.total -= amount;
+            self.available = available;
+            self.total = self.total.checked_sub(amount).ok_or(Error::Overflow)?;
             Ok(())
         }
     }
 
-    fn withdraw_held(&mut self, amount: f64) -> Result<()> {
-        if self.held - amount < 0 as f64 {
+    fn withdraw_held(&mut self, amount: Decimal) -> Result<()> {
+        let held = self.held.checked_sub(amount).ok_or(Error::Overflow)?;
+        if held < Decimal::ZERO {
             Err(Error::InsufficientFunds)
         } else {
-            self.held -= amount;
-            self.total -= amount;
+            self.held = held;
+            self.total = self.total.checked_sub(amount).ok_or(Error::Overflow)?;
             Ok(())
         }
     }
 
-    fn dispute(&mut self, amount: f64) -> Result<()> {
+    fn dispute(&mut self, amount: Decimal) -> Result<()> {
         self.withdraw(amount)?;
         self.hold(amount)?;
         Ok(())
     }
 
-    fn resolve(&mut self, amount: f64) -> Result<()> {
+    fn resolve(&mut self, amount: Decimal) -> Result<()> {
         self.withdraw_held(amount)?;
         self.deposit(amount)?;
         Ok(())
     }
 
-    fn chargeback(&mut self, amount: f64) -> Result<()> {
+    fn chargeback(&mut self, amount: Decimal) -> Result<()> {
         self.withdraw_held(amount)?;
         self.locked = true;
         Ok(())
@@ -75,12 +78,12 @@ impl Account {
     }
 
     #[cfg(test)]
-    pub(crate) fn available(&self) -> f64 {
+    pub(crate) fn available(&self) -> Decimal {
         self.available
     }
 
     #[cfg(test)]
-    pub(crate) fn total(&self) -> f64 {
+    pub(crate) fn total(&self) -> Decimal {
         self.total
     }
 }
@@ -114,7 +117,7 @@ impl Accounts {
         Ok(())
     }
 
-    pub(crate) fn deposit(&mut self, client: u16, amount: f64, tx: u32) -> Result<()> {
+    pub(crate) fn deposit(&mut self, client: u16, amount: Decimal, tx: u32) -> Result<()> {
         let mut account = self.account(client)?;
         if account.frozen() {
             return Ok(());
@@ -126,7 +129,7 @@ impl Accounts {
         Ok(())
     }
 
-    pub(crate) fn withdraw(&mut self, client: u16, amount: f64, tx: u32) -> Result<()> {
+    pub(crate) fn withdraw(&mut self, client: u16, amount: Decimal, tx: u32) -> Result<()> {
         let mut account = self.account(client)?;
         if account.frozen() {
             return Ok(());
@@ -218,12 +221,12 @@ pub(crate) enum Status {
 #[derive(Debug, Clone)]
 struct Transaction {
     id: u32,
-    amount: f64,
+    amount: Decimal,
     status: Status,
 }
 
 impl Transaction {
-    fn new(id: u32, amount: f64) -> Self {
+    fn new(id: u32, amount: Decimal) -> Self {
         Self {
             id,
             amount,
