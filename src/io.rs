@@ -1,46 +1,47 @@
 use crate::account::Account;
-use csv::{Reader, Writer};
-use std::error::Error;
+use csv::{Reader as CsvReader, Writer as CsvWriter};
+use std::fs::File;
 use std::io;
-use std::io::{Stdin, Stdout};
+use std::io::Stdout;
 
+use crate::error::{Error, Result};
 use crate::processor::Record;
 
-pub struct CsvReader {
-    inner: Reader<Stdin>,
+pub struct Reader<T = File> {
+    inner: CsvReader<T>,
 }
 
-impl CsvReader {
-    pub(crate) fn new() -> Self {
-        Self {
-            inner: Reader::from_reader(io::stdin()),
-        }
+impl Reader {
+    pub fn from_path(file: &str) -> Result<Self> {
+        Ok(Self {
+            inner: CsvReader::from_path(file).map_err(|_| Error::InvalidData)?,
+        })
     }
 
-    pub(crate) fn read(&mut self) -> Result<Vec<Record>, Box<dyn Error>> {
+    pub(crate) fn read(&mut self) -> Result<Vec<Record>> {
         let mut records = Vec::new();
         for result in self.inner.deserialize() {
-            let record: Record = result.map_err(|e| Box::new(e))?;
+            let record: Record = result.map_err(|_| Error::InvalidData)?;
             records.push(record);
         }
         Ok(records)
     }
 }
 
-pub struct CsvWriter {
-    inner: Writer<Stdout>,
+pub struct Writer {
+    inner: CsvWriter<Stdout>,
 }
 
-impl CsvWriter {
+impl Writer {
     pub(crate) fn new() -> Self {
         Self {
-            inner: Writer::from_writer(io::stdout()),
+            inner: CsvWriter::from_writer(io::stdout()),
         }
     }
 
-    pub(crate) fn write(&mut self, data: Vec<&Account>) -> Result<(), Box<dyn Error>> {
+    pub(crate) fn write(&mut self, data: Vec<&Account>) -> Result<()> {
         for d in data {
-            self.inner.serialize(d).map_err(|e| Box::new(e))?;
+            self.inner.serialize(d).map_err(|_| Error::InvalidData)?;
         }
         Ok(())
     }

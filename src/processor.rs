@@ -4,7 +4,7 @@ use std::str::FromStr;
 
 use crate::account::Accounts;
 use crate::error::{Error, Result};
-use crate::io::{CsvReader, CsvWriter};
+use crate::io::{Reader, Writer};
 
 // This deserializer is needed to make sure precision is up to 4 decimal places.
 fn deserialize_amount<'de, D>(amount: D) -> std::result::Result<Option<Decimal>, D::Error>
@@ -66,16 +66,22 @@ pub(crate) struct Record {
 
 /// Processor processes the transactions.
 pub struct Processor {
-    reader: CsvReader,
-    writer: CsvWriter,
+    reader: Reader,
+    writer: Writer,
     accounts: Accounts,
 }
 
 impl Processor {
-    pub fn new() -> Self {
+    // We need this function for testing.
+    #[cfg(test)]
+    fn new() -> Self {
+        Self::new_with(Reader::from_path("/").unwrap())
+    }
+
+    pub fn new_with(reader: Reader) -> Self {
         Self {
-            reader: CsvReader::new(),
-            writer: CsvWriter::new(),
+            reader,
+            writer: Writer::new(),
             accounts: Accounts::new(),
         }
     }
