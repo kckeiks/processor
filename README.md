@@ -20,10 +20,9 @@ record transaction, such as attempting to withdraw more than the available amoun
 the processor will ignore the record and continue processing the remaining records.
 4. Dispute, withdraw, and chargeback records that reference unknown transaction IDs 
 will be logged but ignored.
-5. A resolve or chargeback transaction on a transaction that doesn't exist, will be ignored 
-and logged.
+5. A resolve or chargeback transaction on a transaction that doesn't exist, will be ignored.
 6. A resolve or chargeback transaction on a transaction that isn't in "disputed" status will 
-be ignored and logged.
+be ignored.
 
 ### Processor
 

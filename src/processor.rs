@@ -407,4 +407,22 @@ mod tests {
             Err(Error::TxExists)
         )
     }
+
+    #[test]
+    fn undisputed_accounts() {
+        // Trying to chargeback a transaction that is not being disputed.
+        let records = records!("deposit,1,61,400", "chargeback,1,61,", "deposit,1,62,100");
+        let mut processor = Processor::new();
+
+        for record in records {
+            processor.process(record).unwrap();
+        }
+
+        // The dispute transaction is ignored.
+        assert_eq!(
+            processor.accounts.account(1).unwrap().available(),
+            dec!(500)
+        );
+        assert_eq!(processor.accounts.account(1).unwrap().total(), dec!(500));
+    }
 }
