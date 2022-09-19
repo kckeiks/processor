@@ -87,20 +87,15 @@ impl Processor {
     }
 
     /// Start reading transactions using the Reader and writing results using the Writer.
-    pub fn start(mut self) {
-        match self.reader.read() {
-            Ok(records) => {
-                for record in records.clone() {
-                    if let Err(e) = self.process(record) {
-                        log::error!("{:?}", e);
-                    }
-                }
-                self.writer
-                    .write(self.accounts.accounts())
-                    .expect("failed to write")
+    pub fn start(mut self) -> Result<()> {
+        for record in self.reader.read()? {
+            if let Err(e) = self.process(record) {
+                log::error!("{}", e);
             }
-            Err(e) => panic!("failed to read: {}", e),
         }
+
+        self.writer.write(self.accounts.accounts())?;
+        Ok(())
     }
 
     /// Process a single record.

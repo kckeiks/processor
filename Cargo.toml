@@ -11,3 +11,4 @@ serde = { version = "1", features = ["derive"] }
 log = "0.4"
 thiserror = "1.0"
 rust_decimal = "1.26"
+env_logger = "0.9"
