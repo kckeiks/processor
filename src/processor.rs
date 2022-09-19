@@ -4,13 +4,13 @@ use crate::account::Accounts;
 use crate::error::{Error, Result};
 use crate::io::{CsvReader, CsvWriter};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct Record {
     #[serde(rename = "type")]
-    pub(crate) ty: String,
-    pub(crate) client: u16,
-    pub(crate) tx: u32,
-    pub(crate) amount: f64,
+    ty: String,
+    client: u16,
+    tx: u32,
+    amount: Option<f64>,
 }
 
 /// Processor processes the transactions.
@@ -21,7 +21,7 @@ pub struct Processor {
 }
 
 impl Processor {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             reader: CsvReader::new(),
             writer: CsvWriter::new(),
@@ -30,22 +30,31 @@ impl Processor {
     }
 
     /// Start reading transactions using the Reader and writing results using the Writer.
-    pub(crate) fn start(mut self) {
+    pub fn start(mut self) {
         match self.reader.read() {
-            Ok(records) => self.writer.write(records).expect("failed to write"),
+            Ok(records) => {
+                for record in records.clone() {
+                    if let Err(e) = self.process(record) {
+                        log::error!("{:?}", e);
+                    }
+                }
+                self.writer.write(records).expect("failed to write")
+            }
             Err(e) => panic!("failed to read: {}", e),
         }
     }
 
     /// Process a single record.
-    pub(crate) fn process(&mut self, record: Record) -> Result<()> {
+    fn process(&mut self, record: Record) -> Result<()> {
         match record.ty.to_lowercase().as_str() {
-            "deposit" => self
-                .accounts
-                .deposit(record.client, record.amount, record.tx)?,
-            "withdrawal" => self
-                .accounts
-                .withdraw(record.client, record.amount, record.tx)?,
+            "deposit" => {
+                let amount = record.amount.ok_or(Error::InvalidData)?;
+                self.accounts.deposit(record.client, amount, record.tx)?
+            }
+            "withdrawal" => {
+                let amount = record.amount.ok_or(Error::InvalidData)?;
+                self.accounts.withdraw(record.client, amount, record.tx)?
+            }
             "dispute" => self.accounts.dispute(record.client, record.tx)?,
             "resolve" => self.accounts.resolve(record.client, record.tx)?,
             "chargeback" => self.accounts.chargeback(record.client, record.tx)?,
@@ -170,43 +179,51 @@ mod tests {
             "deposit,1,61,100",
             "deposit,2,63,100",
             "deposit,1,64,120",
-            "dispute,1,61,0",
+            "dispute,1,61,",
             "deposit,1,66,100"
         );
         let mut processor = Processor::new();
         for record in records {
             processor.process(record).unwrap();
         }
-        assert_eq!(processor.accounts.account(1).unwrap().available(), 220 as f64);
+        assert_eq!(
+            processor.accounts.account(1).unwrap().available(),
+            220 as f64
+        );
         assert_eq!(processor.accounts.account(1).unwrap().total(), 320 as f64);
-        assert_eq!(processor.accounts.account(2).unwrap().available(), 100 as f64);
+        assert_eq!(
+            processor.accounts.account(2).unwrap().available(),
+            100 as f64
+        );
         assert_eq!(processor.accounts.account(2).unwrap().total(), 100 as f64);
 
         // We get funds back after resolving.
-        let records = records!(
-            "resolve,1,61,0",
-            "deposit,1,69,100"
-        );
+        let records = records!("resolve,1,61,", "deposit,1,69,100");
         for record in records {
             processor.process(record).unwrap();
         }
-        assert_eq!(processor.accounts.account(1).unwrap().available(), 420 as f64);
+        assert_eq!(
+            processor.accounts.account(1).unwrap().available(),
+            420 as f64
+        );
         assert_eq!(processor.accounts.account(1).unwrap().total(), 420 as f64);
 
         // Try to resolve transaction that is not being desputed.
         let records = records!(
             "deposit,1,61,100",
             "deposit,1,64,120",
-            "resolve,1,61,0",
+            "resolve,1,61,",
             "deposit,1,66,100"
         );
         let mut processor = Processor::new();
         for record in records {
             processor.process(record).unwrap();
         }
-        assert_eq!(processor.accounts.account(1).unwrap().available(), 320 as f64);
+        assert_eq!(
+            processor.accounts.account(1).unwrap().available(),
+            320 as f64
+        );
         assert_eq!(processor.accounts.account(1).unwrap().total(), 320 as f64);
-
     }
 
     #[test]
@@ -216,35 +233,40 @@ mod tests {
             "deposit,1,61,100",
             "deposit,2,63,100",
             "deposit,1,64,120",
-            "dispute,1,61,0",
+            "dispute,1,61,",
             "deposit,1,66,100"
         );
         let mut processor = Processor::new();
         for record in records {
             processor.process(record).unwrap();
         }
-        assert_eq!(processor.accounts.account(1).unwrap().available(), 220 as f64);
+        assert_eq!(
+            processor.accounts.account(1).unwrap().available(),
+            220 as f64
+        );
         assert_eq!(processor.accounts.account(1).unwrap().total(), 320 as f64);
-        assert_eq!(processor.accounts.account(2).unwrap().available(), 100 as f64);
+        assert_eq!(
+            processor.accounts.account(2).unwrap().available(),
+            100 as f64
+        );
         assert_eq!(processor.accounts.account(2).unwrap().total(), 100 as f64);
 
         // We get a chargeback and trying to deposit fails because account is frozen.
-        let records = records!(
-            "chargeback,1,61,0",
-            "deposit,1,69,100"
-        );
+        let records = records!("chargeback,1,61,", "deposit,1,69,100");
         for record in records {
             processor.process(record).unwrap();
         }
-        assert_eq!(processor.accounts.account(1).unwrap().available(), 220 as f64);
+        assert_eq!(
+            processor.accounts.account(1).unwrap().available(),
+            220 as f64
+        );
         assert_eq!(processor.accounts.account(1).unwrap().total(), 220 as f64);
-
 
         // Try to chargeback a non-desputed transaction.
         let records = records!(
             "deposit,1,61,100",
             "deposit,1,64,100",
-            "chargeback,1,61,0",
+            "chargeback,1,61,",
             "deposit,1,65,100"
         );
         let mut processor = Processor::new();
@@ -253,7 +275,10 @@ mod tests {
         }
 
         // Chargeback gets ignored and we can still process other records.
-        assert_eq!(processor.accounts.account(1).unwrap().available(), 300 as f64);
+        assert_eq!(
+            processor.accounts.account(1).unwrap().available(),
+            300 as f64
+        );
         assert_eq!(processor.accounts.account(1).unwrap().total(), 300 as f64);
     }
 
@@ -262,15 +287,18 @@ mod tests {
         // Try to dispute a non existent transaction.
         let records = records!(
             "deposit,1,61,100",
-            "dispute,1,33,0",
-            "chargeback,1,33,0",
+            "dispute,1,33,",
+            "chargeback,1,33,",
             "deposit,1,61,100"
         );
         let mut processor = Processor::new();
         for record in records {
             processor.process(record).unwrap();
         }
-        assert_eq!(processor.accounts.account(1).unwrap().available(), 200 as f64);
+        assert_eq!(
+            processor.accounts.account(1).unwrap().available(),
+            200 as f64
+        );
         assert_eq!(processor.accounts.account(1).unwrap().total(), 200 as f64);
     }
 }
